@@ -6,7 +6,6 @@
 
 namespace Magento\ProductAlert\Controller\Add;
 
-use Magento\Framework\App\Action\HttpGetActionInterface;
 use Magento\ProductAlert\Controller\Add as AddController;
 use Magento\Framework\App\Action\Context;
 use Magento\Customer\Model\Session as CustomerSession;
@@ -14,12 +13,8 @@ use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Framework\App\Action\Action;
 use Magento\Framework\Controller\ResultFactory;
 use Magento\Framework\Exception\NoSuchEntityException;
-use Magento\Store\Model\StoreManagerInterface;
 
-/**
- * Controller for notifying about stock.
- */
-class Stock extends AddController implements HttpGetActionInterface
+class Stock extends AddController
 {
     /**
      * @var \Magento\Catalog\Api\ProductRepositoryInterface
@@ -27,31 +22,20 @@ class Stock extends AddController implements HttpGetActionInterface
     protected $productRepository;
 
     /**
-     * @var StoreManagerInterface
-     */
-    private $storeManager;
-
-    /**
      * @param \Magento\Framework\App\Action\Context $context
      * @param \Magento\Customer\Model\Session $customerSession
      * @param \Magento\Catalog\Api\ProductRepositoryInterface $productRepository
-     * @param StoreManagerInterface|null $storeManager
      */
     public function __construct(
         Context $context,
         CustomerSession $customerSession,
-        ProductRepositoryInterface $productRepository,
-        StoreManagerInterface $storeManager = null
+        ProductRepositoryInterface $productRepository
     ) {
         $this->productRepository = $productRepository;
         parent::__construct($context, $customerSession);
-        $this->storeManager = $storeManager ?: $this->_objectManager
-            ->get(\Magento\Store\Model\StoreManagerInterface::class);
     }
 
     /**
-     * Method for adding info about product alert stock.
-     *
      * @return \Magento\Framework\Controller\Result\Redirect
      */
     public function execute()
@@ -68,21 +52,23 @@ class Stock extends AddController implements HttpGetActionInterface
         try {
             /* @var $product \Magento\Catalog\Model\Product */
             $product = $this->productRepository->getById($productId);
-            $store = $this->storeManager->getStore();
             /** @var \Magento\ProductAlert\Model\Stock $model */
             $model = $this->_objectManager->create(\Magento\ProductAlert\Model\Stock::class)
                 ->setCustomerId($this->customerSession->getCustomerId())
                 ->setProductId($product->getId())
-                ->setWebsiteId($store->getWebsiteId())
-                ->setStoreId($store->getId());
+                ->setWebsiteId(
+                    $this->_objectManager->get(\Magento\Store\Model\StoreManagerInterface::class)
+                        ->getStore()
+                        ->getWebsiteId()
+                );
             $model->save();
-            $this->messageManager->addSuccessMessage(__('Alert subscription has been saved.'));
+            $this->messageManager->addSuccess(__('Alert subscription has been saved.'));
         } catch (NoSuchEntityException $noEntityException) {
-            $this->messageManager->addErrorMessage(__('There are not enough parameters.'));
+            $this->messageManager->addError(__('There are not enough parameters.'));
             $resultRedirect->setUrl($backUrl);
             return $resultRedirect;
         } catch (\Exception $e) {
-            $this->messageManager->addExceptionMessage(
+            $this->messageManager->addException(
                 $e,
                 __("The alert subscription couldn't update at this time. Please try again later.")
             );
